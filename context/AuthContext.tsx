@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useRef } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {API_URL} from "@env"
 
 type User = {
     email: string;
@@ -68,7 +69,7 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
     async function login(email: string, password: string) {
         try {
-            const response = await fetch(`https://api.feedsync.az/api/api/login/`, {
+            const response = await fetch(`${API_URL}/api/login/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -123,7 +124,7 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
             console.log('Refreshing access token with refresh token:', user.refresh);
 
-            const response = await fetch(`https://api.feedsync.az/api/token/refresh/`, {
+            const response = await fetch(`${API_URL}/token/refresh/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -180,41 +181,41 @@ export const AuthProvider = ({ children }: { children: any }) => {
     }
 
     async function logOut() {
-        // try {
-        //     // Clear the refresh interval first
-        //     if (refreshIntervalRef.current) {
-        //         clearInterval(refreshIntervalRef.current);
-        //         refreshIntervalRef.current = null;
-        //     }
+        try {
+            // Clear the refresh interval first
+            if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+                refreshIntervalRef.current = null;
+            }
 
-        //     // Call logout endpoint with refresh token
-        //     if (user?.refresh) {
-        //         console.log('Calling logout API with refresh token:', user.refresh);
-        //         const response = await fetch(`https://api.feedsync.az/api/api/logout/`, {
-        //             method: 'POST',
-        //             headers: {
-        //                 'Content-Type': 'application/json',
-        //                 'Authorization': `Bearer ${user.access}`,
-        //             },
-        //             body: JSON.stringify({
-        //                 refresh: user.refresh
-        //             }),
-        //         });
+            // Call logout endpoint with refresh token
+            if (user?.refresh) {
+                console.log('Calling logout API with refresh token:', user.refresh);
+                const response = await fetch(`${API_URL}/api/logout/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${user.access}`,
+                    },
+                    body: JSON.stringify({
+                        refresh: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MDA2Mjc5OSwiaWF0IjoxNzY3NDcwNzk5LCJqdGkiOiJkN2Q3YzExMzcwMjI0YmEyYjFlY2E2YTQ1NjIyNjVlYiIsInVzZXJfaWQiOjQwfQ.eZh-4bDJ3yFmRpxDUAD9jF5_JOap7imuw-aMKFwvCPw'
+                    }),
+                });
 
-        //         if (!response.ok) {
-        //             console.warn('Logout API returned error, but continuing with local logout');
-        //         } else {
-        //             console.log('Logout API successful');
-        //         }
-        //     }
-        // } catch (error) {
-        //     console.error('Logout API error:', error);
-        // } finally {
-        //     // Clear state and storage regardless of API result
-        //     setUser(null);
-        //     await AsyncStorage.removeItem('user');
-        //     console.log('User logged out and data cleared');
-        // }
+                if (!response.ok) {
+                    console.warn('Logout API returned error, but continuing with local logout');
+                } else {
+                    console.log('Logout API successful');
+                }
+            }
+        } catch (error) {
+            console.error('Logout API error:', error);
+        } finally {
+            // Clear state and storage regardless of API result
+            setUser(null);
+            await AsyncStorage.removeItem('user');
+            console.log('User logged out and data cleared');
+        }
     }
 
     return (
