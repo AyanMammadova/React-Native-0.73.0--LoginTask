@@ -19,7 +19,7 @@ type Errors = {
 };
 
 export default function LoginForm() {
-  const navigation=useNavigation()
+  const navigation = useNavigation()
   const { login } = useAuth();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -33,7 +33,7 @@ export default function LoginForm() {
     if (!password) newErrors.password = 'Password is required';
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.keys(newErrors).length == 0;
   };
 
   const handleSubmit = async () => {
@@ -42,11 +42,10 @@ export default function LoginForm() {
       try {
         const data = await login(email, password);
         console.log('Login successful:', data);
-        
-        // Navigate to Home on success
+
         navigation.navigate('Home');
       } catch (err: any) {
-        Alert.alert('Login Failed', err.message || 'An error occurred');
+        Alert.alert(err.message);
       } finally {
         setIsLoading(false);
       }
@@ -57,12 +56,12 @@ export default function LoginForm() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      behavior={Platform.OS == 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS == 'ios' ? 100 : 0}
       style={styles.container}
     >
       <View style={styles.card}>
-        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.title}>Welcome</Text>
 
         <TextInput
           value={email}
@@ -71,7 +70,7 @@ export default function LoginForm() {
           onChangeText={setEmail}
           style={styles.input}
           editable={!isLoading}
-        />
+        />  
         {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
         <TextInput
@@ -87,16 +86,12 @@ export default function LoginForm() {
           <Text style={styles.errorText}>{errors.password}</Text>
         )}
 
-        <Pressable 
-          onPress={handleSubmit} 
+        <Pressable
+          onPress={handleSubmit}
           style={[styles.button, isLoading && styles.buttonDisabled]}
           disabled={isLoading}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.buttonText}>Login</Text>
-          )}
+          {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Login</Text>}
         </Pressable>
       </View>
     </KeyboardAvoidingView>

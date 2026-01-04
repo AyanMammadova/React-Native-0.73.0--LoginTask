@@ -1,58 +1,46 @@
-import { useNavigation } from '@react-navigation/native';
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView, StyleSheet, StatusBar, Text, View, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../hooks/useAuth';
 
 export default function HomeScreen() {
-  const navigation = useNavigation();
-  const { user, logOut } = useAuth();
+  const { user, logOut, refreshToken } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  // Debug: Check what's in AsyncStorage directly
+      
   useEffect(() => {
-    const checkAsyncStorage = async () => {
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        console.log('=== Direct AsyncStorage Read ===');
-        console.log('Raw stored data:', storedUser);
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          console.log('Parsed User:', parsed);
-          console.log('Email:', parsed.email);
-          console.log('Access Token:', parsed.access);
-          console.log('Refresh Token:', parsed.refresh);
-          console.log('CSRF Token:', parsed.csrf);
-        }
-        console.log('================================');
-      } catch (error) {
-        console.error('Error reading AsyncStorage:', error);
-      }
-    };
-    
-    checkAsyncStorage();
+    checkAndRefreshToken();
   }, []);
 
-  // Debug: Check what's in user from context
-  useEffect(() => {
-    console.log('=== User from AuthContext ===');
-    console.log('Full User Object:', user);
-    console.log('Email:', user?.email);
-    console.log('Access Token:', user?.access);
-    console.log('Refresh Token:', user?.refresh);
-    console.log('CSRF Token:', user?.csrf);
-    console.log('===========================');
-  }, [user]);
+  const checkAndRefreshToken = async () => {
+    try {
+      const userJson = await AsyncStorage.getItem('user');   
+      if (!userJson) return;
+
+      const userData = JSON.parse(userJson);
+
+      if (userData.tokenSetAt) {
+        const currentTime = Date.now()
+        const tokenAge = currentTime - userData.tokenSetAt;
+        const sixMinutes = 6 * 60 * 1000
+        console.log(tokenAge / 1000 + ' seconds')
+        if (tokenAge >= sixMinutes) {
+          await refreshToken();
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
       [
-        {
+        {  
           text: 'Cancel',
           style: 'cancel',
-        },
+        },    
         {
           text: 'Logout',
           style: 'destructive',
@@ -60,28 +48,27 @@ export default function HomeScreen() {
             setIsLoggingOut(true);
             try {
               await logOut();
-              // Navigation will happen automatically when user becomes null
-            } catch (error) {
+            } catch (error) {   
               Alert.alert('Error', 'Failed to logout. Please try again.');
               setIsLoggingOut(false);
             }
           },
         },
       ],
-    );
+    );                                      
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#111827" barStyle="light-content" />
 
-      <View style={styles.headerContainer}>
+      <View style={styles.header}>
         <View>
-          <Text style={styles.header}>Welcome, Ayan!</Text>
-          {user?.email && <Text style={styles.email}>{user.email}</Text>}
+          <Text style={styles.greeting}>Welcome </Text>
+          <Text style={styles.userName}>{user?.email}</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.logoutButton} 
+        <TouchableOpacity
+          style={styles.logoutButton}
           onPress={handleLogout}
           disabled={isLoggingOut}
         >
@@ -91,30 +78,61 @@ export default function HomeScreen() {
             <Text style={styles.logoutText}>Logout</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </View>  
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.sectionTitle}>Your Stats</Text>
-        <View style={styles.cardsRow}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Orders</Text>
-            <Text style={styles.cardValue}>24</Text>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>4.8</Text>
+            <Text style={styles.statLabel}>Rating</Text>
           </View>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Messages</Text>
-            <Text style={styles.cardValue}>12</Text>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>86%</Text>
+            <Text style={styles.statLabel}>Completed</Text>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('Profile')}>
-            <Text style={styles.actionText}>Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.actionText}>Settings</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.sectionTitle}>Menu</Text>
+
+        <TouchableOpacity style={styles.actionCard}>
+          <View style={styles.actionContent}>
+            <Text style={styles.actionTitle}>Profile Settings</Text>
+            <Text style={styles.actionSubtitle}>Manage your account information</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard}>
+          <View style={styles.actionContent}>
+            <Text style={styles.actionTitle}>Preferences</Text>
+            <Text style={styles.actionSubtitle}>Customize your experience</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard}>
+          <View style={styles.actionContent}>
+            <Text style={styles.actionTitle}>Notifications</Text>
+            <Text style={styles.actionSubtitle}>3 unread notifications</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionCard}>
+          <View style={styles.actionContent}>
+            <Text style={styles.actionTitle}>Payment Methods</Text>
+            <Text style={styles.actionSubtitle}>Manage billing information</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -123,85 +141,106 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#111827',
   },
-  headerContainer: {
+  header: {
+    backgroundColor: '#1F2937',
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
-  header: {
-    color: '#F9FAFB',
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  email: {
+  greeting: {
     color: '#9CA3AF',
     fontSize: 14,
+    letterSpacing: 0.5,
+  },
+  userName: {
+    color: '#F9FAFB',
+    fontSize: 24,
+    fontWeight: '600',
     marginTop: 4,
   },
   logoutButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: 'red',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
-    minWidth: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 8,
   },
   logoutText: {
-    color: '#FFFFFF',
+    color: '#F9FAFB',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
-  scrollContainer: {
-    paddingBottom: 20,
-  },
-  cardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  card: {
+  scrollView: {
     flex: 1,
-    backgroundColor: '#1F2933',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 5,
   },
-  cardTitle: {
-    color: '#9CA3AF',
-    fontSize: 14,
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 20,
+    gap: 15,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  statValue: {
+    color: '#F9FAFB',
+    fontSize: 32,
+    fontWeight: '600',
     marginBottom: 8,
   },
-  cardValue: {
-    color: '#F9FAFB',
-    fontSize: 22,
-    fontWeight: '600',
+  statLabel: {
+    color: '#9CA3AF',
+    fontSize: 14,
   },
   sectionTitle: {
     color: '#F9FAFB',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    marginVertical: 12,
+    marginTop: 32,
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
-  actionsRow: {
+  actionCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#6366F1',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginHorizontal: 5,
     alignItems: 'center',
+    backgroundColor: '#1F2937',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
   },
-  actionText: {
-    color: '#FFF',
-    fontWeight: '600',
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
+    color: '#F9FAFB',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  actionSubtitle: {
+    color: '#9CA3AF',
+    fontSize: 14,
+  },
+  actionArrow: {
+    color: '#6B7280',
+    fontSize: 28,
+    fontWeight: '300',
+  },
+  bottomPadding: {
+    height: 20,
   },
 });

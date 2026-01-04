@@ -1,12 +1,15 @@
 import { createContext, useState, useEffect, useRef } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {API_URL} from "@env"
+import { API_URL } from "@env"
+import { Alert } from "react-native";
 
 type User = {
     email: string;
     access: string;
     refresh: string;
     csrf: string;
+    tokenSetAt?: number;
+    refreshCount?: number;
 };
 
 export const AuthContext = createContext<any>(null);
@@ -14,54 +17,60 @@ export const AuthContext = createContext<any>(null);
 export const AuthProvider = ({ children }: { children: any }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Load user data from AsyncStorage on app start
     useEffect(() => {
         loadUserData();
     }, []);
 
-    // Set up automatic token refresh when user logs in
     useEffect(() => {
-        if (user) {
-            console.log('Setting up token refresh interval (every 6 minutes)');
-            // Clear any existing interval
-            if (refreshIntervalRef.current) {
-                clearInterval(refreshIntervalRef.current);
+        if (user?.tokenSetAt) {
+            if (refreshTimerRef.current) {
+                clearTimeout(refreshTimerRef.current);
             }
 
-            // Refresh token every 6 minutes (360000 ms)
-            refreshIntervalRef.current = setInterval(() => {
-                console.log('Auto-refreshing token...');
-                refreshToken();
-            }, 6 * 60 * 1000); // 6 minutes
+            const currentTime = Date.now();
+            const tokenAge = currentTime - user.tokenSetAt;
+            const sixMinutes = 6 * 60 * 1000;
+            const timeUntilRefresh = sixMinutes - tokenAge;
 
-            // Cleanup on unmount or when user logs out
+            if (timeUntilRefresh <= 0) {
+                refreshToken();
+            } else {
+                refreshTimerRef.current = setTimeout(() => {
+                    refreshToken();
+                }, timeUntilRefresh);
+            }
+
             return () => {
-                if (refreshIntervalRef.current) {
-                    console.log('Clearing token refresh interval');
-                    clearInterval(refreshIntervalRef.current);
-                    refreshIntervalRef.current = null;
+                if (refreshTimerRef.current) {
+                    clearTimeout(refreshTimerRef.current);
+                    refreshTimerRef.current = null;
                 }
             };
         }
-    }, [user]);
+    }, [user?.tokenSetAt]);
 
     const loadUserData = async () => {
         try {
-            console.log('Loading user data from AsyncStorage...');
-            const userData = await AsyncStorage.getItem('user');
-            console.log('Raw data from AsyncStorage:', userData);
+            const userJson = await AsyncStorage.getItem('user');
+            if (userJson) {
+                const userData = JSON.parse(userJson);
 
-            if (userData) {
-                const parsedUser = JSON.parse(userData);
-                console.log('Parsed user data:', parsedUser);
-                setUser(parsedUser);
-            } else {
-                console.log('No user data found in AsyncStorage');
+                if (userData.tokenSetAt) {
+                    const currentTime = Date.now();
+                    const tokenAge = currentTime - userData.tokenSetAt;
+                    const sixMinutes = 6 * 60 * 1000;
+  
+                    if (tokenAge >= sixMinutes) {  
+                        console.log('Token vaxti bitdi');      
+                    }
+                }
+     
+                setUser(userData);
             }
-        } catch (error) {
-            console.error('Error loading user data:', error);
+        } catch (e) {
+            console.error(e);
         } finally {
             setIsLoading(false);
         }
@@ -69,49 +78,38 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
     async function login(email: string, password: string) {
         try {
+            const payload = { email, password };
+
             const response = await fetch(`${API_URL}/api/login/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    email: email,
-                    password: password
-                }),
+                body: JSON.stringify(payload),
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errorData = await response.json();
-                console.log(errorData);
-                throw new Error(errorData.detail || 'Login failed');
+                Alert.alert(data.detail);
+                return;
             }
 
-            const data = await response.json();
-            console.log('Full login response:', data);
-
-            // Store essential user data
             const userData: User = {
                 email: data.email,
                 access: data.access,
                 refresh: data.refresh,
                 csrf: data.csrf,
+                tokenSetAt: Date.now(),
+                refreshCount: 0,
             };
 
-            console.log('Storing user data:', userData);
-            console.log('Access Token:', userData.access);
-            console.log('Refresh Token:', userData.refresh);
-            console.log('CSRF Token:', userData.csrf);
-
-            // Save to state
             setUser(userData);
-
-            // Save to AsyncStorage
             await AsyncStorage.setItem('user', JSON.stringify(userData));
-            console.log('User data saved to AsyncStorage');
-
+            console.log('login successful');
             return data;
         } catch (error) {
-            console.error('Login error:', error);
+            console.error(error);
             throw error;
         }
     }
@@ -122,59 +120,52 @@ export const AuthProvider = ({ children }: { children: any }) => {
                 throw new Error('No refresh token available');
             }
 
-            console.log('Refreshing access token with refresh token:', user.refresh);
+            const currentRefreshCount = user.refreshCount || 0;
 
+            if (currentRefreshCount >= 2) {
+                Alert.alert('Session Expired', 'Please login again'); 
+                await logOut();
+                return;
+            }
+            const payload = { refresh: user.refresh };
             const response = await fetch(`${API_URL}/token/refresh/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    refresh: user.refresh
-                }),
+                body: JSON.stringify(payload),
             });
-
-            console.log('Refresh token response status:', response.status);
-            console.log('Refresh token response headers:', response.headers);
-
-            // Check content type before parsing
-            const contentType = response.headers.get('content-type');
-            console.log('Response content-type:', contentType);
+            const responseText = await response.text();
 
             if (!response.ok) {
-                const responseText = await response.text();
-                console.error('Token refresh failed. Status:', response.status);
-                console.error('Response body:', responseText);
                 throw new Error(`Token refresh failed: ${response.status}`);
             }
 
-            // Try to parse as JSON
-            const responseText = await response.text();
-            console.log('Raw response:', responseText);
-            
             let data;
             try {
                 data = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('Failed to parse JSON response:', responseText);
-                throw new Error('Invalid JSON response from server');
+                console.log(responseText)
+                console.log(response)
+                console.log('token yenilendi successfully');
+            } catch (err: any) {
+                throw new Error(err);
             }
 
-            console.log('Token refresh successful. New access token:', data.access);
-
-            // Update user with new access token
             const updatedUser = {
                 ...user,
                 access: data.access,
+                tokenSetAt: Date.now(),
+                refreshCount: currentRefreshCount + 1,
             };
+
+            console.log(`Refresh count: ${updatedUser.refreshCount}`);
 
             setUser(updatedUser);
             await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
             return data;
         } catch (error) {
-            console.error('Token refresh error:', error);
-            // If refresh fails, log out the user
+            console.error(error);
             await logOut();
             throw error;
         }
@@ -182,39 +173,33 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
     async function logOut() {
         try {
-            // Clear the refresh interval first
-            if (refreshIntervalRef.current) {
-                clearInterval(refreshIntervalRef.current);
-                refreshIntervalRef.current = null;
+            if (refreshTimerRef.current) {
+                clearTimeout(refreshTimerRef.current);
+                refreshTimerRef.current = null;
             }
 
-            // Call logout endpoint with refresh token
             if (user?.refresh) {
-                console.log('Calling logout API with refresh token:', user.refresh);
+                const payload = { refresh: user.refresh };
+                console.log(payload)
                 const response = await fetch(`${API_URL}/api/logout/`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${user.access}`,
+                        'Authorization': `Bearer ${user.access}`
                     },
-                    body: JSON.stringify({
-                        refresh: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3MDA2Mjc5OSwiaWF0IjoxNzY3NDcwNzk5LCJqdGkiOiJkN2Q3YzExMzcwMjI0YmEyYjFlY2E2YTQ1NjIyNjVlYiIsInVzZXJfaWQiOjQwfQ.eZh-4bDJ3yFmRpxDUAD9jF5_JOap7imuw-aMKFwvCPw'
-                    }),
+                    body: JSON.stringify(payload),
                 });
 
                 if (!response.ok) {
-                    console.warn('Logout API returned error, but continuing with local logout');
+                    console.error('Logout API call failed:', response.status);
                 } else {
-                    console.log('Logout API successful');
-                }
+                    console.log('Logout API call successful');
+                }        
             }
         } catch (error) {
-            console.error('Logout API error:', error);
-        } finally {
-            // Clear state and storage regardless of API result
+        } finally {      
             setUser(null);
             await AsyncStorage.removeItem('user');
-            console.log('User logged out and data cleared');
         }
     }
 

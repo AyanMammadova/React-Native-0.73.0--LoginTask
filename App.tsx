@@ -22,20 +22,10 @@ function Navigation() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          // User is logged in - show Home screen
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-          </>
-        ) : (
-          // User is not logged in - show Login screen
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-          </>
-        )}
+        {user ? <Stack.Screen name="Home" component={HomeScreen} /> : <Stack.Screen name="Login" component={LoginScreen} />}
       </Stack.Navigator>
     </NavigationContainer>
-  );
+  );  
 }
 
 export default function App() {
